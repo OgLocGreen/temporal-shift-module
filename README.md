@@ -254,3 +254,17 @@ We have build an online hand gesture recognition demo using our TSM. The model i
 - Recorded video of the live demo [[link]](https://file.lzhu.me/projects/tsm/#live_demo)
 - Code of the live demo and set up tutorial:  [`online_demo`](online_demo) 
 
+## FPGA Setup
+
+To build the FPGA project, ensure you have initialized to tfslim submodule (git submodule update --init --recursive).
+
+This was tested with the ZCU104 MPSOC DPU TRD in the Vitis-AI repository and the Ultra96V2 Avnet 2020.1 beta branch (https://github.com/Avnet/vitis/tree/2020.1) (See the following guide for additional build instructions https://www.hackster.io/AlbertaBeef/vitis-ai-1-1-flow-for-avnet-vitis-platforms-part-2-f18be4)
+
+The `online_demo/mobilenet_v2_tfslim.py` and `resnet50_tfslim.py` are the primary scripts to build the TSM models for FPGA. To generate the split model set `SPLIT_MODEL`,`SPLIT_EXPORT`,and EXPORT to True at the top of the files. After running the script, you will see the split model dumped to the `*_split_export` directories.
+
+To gather quantization information, one must run the unsplit models. To do so ensure you set to quantize data paths at the TODOs at the top of the files. Then set `SPLIT_MODEL`,`SPLIT_EXPORT`, and EXPORT to False. Then set the corresponding `QUANTIZE_*` flag and `DUMP_QUANTIZE` flag to True to enable quantization.
+
+Once quantization data is generated, one can move to the `fpga_build` from which one uses the `quantize_split.sh` and `compile_split.sh` files to launch `vai_q_tensorflow` and `vai_c_tensorflow` respectively (from within the docker container).
+
+Once model quantization is complete one can run the corresponding Makefile to generate the demo executable from the src files and generated DPU kernels.
+

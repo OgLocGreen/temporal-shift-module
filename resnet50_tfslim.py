@@ -14,14 +14,14 @@ import PIL
 import tf_slim as slim
 from nets import resnet_v1
 
-EXPORT = False
+EXPORT = True
 IMPORT_PYTORCH = True
-SPLIT_MODEL = False
+SPLIT_MODEL = True
 SPLIT_EXPORT = True
 
 RUN_MODEL = False and not SPLIT_MODEL
 DUMP_QUANTIZE = True and not SPLIT_MODEL
-QUANTIZE_KINETICS = True
+QUANTIZE_KINETICS = False
 
 # To generate images from videos and clips see README - Data Preparation
 KINETICS_DIR = "" # TODO: Set to kinetics calibration data directory. (i.e. KINETICS_DIR/category/vid_id/img_*.jpg

@@ -10,7 +10,7 @@ import cv2
 from PIL import Image, ImageOps
 import tensorflow.compat.v1 as tf
 
-QUANTIZE_RESULTS = "" # TODO: Set to path containing quantization results so post-quantization model can be loaded
+QUANTIZE_RESULTS = "" # TODO: Set to path containing quantization results so post-quantization model can be loaded (see fpga_build directory)
 SPLIT_GRAPH = True
 JESTER_TEST = True
 JESTER_PATH = ""# TODO: Set directly to jester video directory containing images (i.e. jester_data/vid_num/)
