@@ -179,9 +179,6 @@ void allocBuffers(DPUTask* tasks[NUM_KERNELS]) {
                 (int8_t*&)splitInfo[i].virt_in, (int8_t*&)splitInfo[i].phys_in);
         dpuBindOutputTensorBaseAddress(tasks[i],
                 (int8_t*&)splitInfo[i].virt_out, (int8_t*&)splitInfo[i].phys_out);
-
-        //printf("IN: %p, %p\n", splitInfo[i].virt_in, splitInfo[i].phys_in);
-        //printf("OUT: %p, %p\n", splitInfo[i].virt_out, splitInfo[i].phys_out);
     }
 }
 
@@ -220,10 +217,6 @@ void doShift(int split_num, ShiftBufferPool& shift_buffers) {
 
     int c = input_node.shape[2] / 8;
 
-    //printf("split: %d\n", split_num);
-    //printf("buffer: %p\n", buffer);
-    //printf("in_shape: (%d, %d, %d)\n", input_node.shape[0], input_node.shape[1], input_node.shape[2]);
-
     for (int i = 0; i < input_node.shape[0]; i++) {
         for (int j = 0; j < input_node.shape[1]; j++) {
             aquant* in = input_data + i*input_node.shape[1]*input_node.shape[2]
@@ -239,9 +232,6 @@ void doShift(int split_num, ShiftBufferPool& shift_buffers) {
             memcpy(shift, in, c*sizeof(aquant));
         }
     }
-
-    //printf("x1: %d\n", int(*buffer));
-    //printf("x2: %d\n", int(*(output_data+c)));
 
     // TODO: Merge residual and input split memory regions
     memcpy(splitInfo[split_num].residAddr(), input_data, input_node.size());
@@ -287,10 +277,7 @@ void runTSMSerial(DPUTask* tasks[NUM_KERNELS], ShiftBufferPool& shift_buffers) {
 
         dpuSyncDevToMem(splitInfo[i].outHandle, 0, splitInfo[i].outSize());
 
-        //printf("[%d] out (%p): %d, %f\n", i, splitInfo[i].outAddr(), *splitInfo[i].outAddr(), (*splitInfo[i].outAddr())*out_scale);
-
         prev_out_scale = out_scale;
-        //printf("[%d] shift_scale: %f, resid_scale: %f, outscale: %f\n", i, shift_scale, resid_scale, out_scale);
     }
 }
 
@@ -427,14 +414,8 @@ int run(cv::VideoCapture& cap) {
                 cap.read(frame);
             }
             auto t_postframe = high_resolution_clock::now();
-            // Mirror frame
-            //std::cout << int(frame.at<cv::Vec3b>(0,0)[0]) << ", ";
-            //std::cout << int(frame.at<cv::Vec3b>(0,0)[1]) << ", ";
-            //std::cout << int(frame.at<cv::Vec3b>(0,0)[2]) << std::endl;
             cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
             frame.convertTo(frame_rgb, CV_32FC3, 1/255.0);
-            //int new_w = 224;
-            //int new_h = 224;
             int new_w = 256;
             int new_h = 256;
             if (frame.cols > frame.rows) {
@@ -443,35 +424,17 @@ int run(cv::VideoCapture& cap) {
                 new_h = 256*frame.rows/frame.cols;
             }
             cv::resize(frame_rgb, frame_rgb, cv::Size(new_w, new_h));
-            //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[0]) << std::endl;
             frame_rgb = frame_rgb(cv::Rect((new_w - 224)/2, (new_h - 224)/2, 224, 224)).clone();
-            //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[0]) << std::endl;
 
             // Normalize:
             // mean = (0.485, 0.456, 0.406) = (124, i27, 104)
             // std = (0.229, 0.224, 0.225)
-            //frame_rgb = (frame_rgb - cv::Scalar(124, 127, 104));
             frame_rgb -= cv::Scalar(0.485,0.456, 0.406);
             cv::divide(frame_rgb, cv::Scalar(0.229, 0.224, 0.225), frame_rgb);
-            //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[0]) << ", ";
-            //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[1]) << ", ";
-            //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[2]) << std::endl;
-            //frame_rgb *= (in_scale/255);
-            //std::cout << (int*)in_img.data << std::endl;
-            //frame_rgb.assignTo(in_img);
-            //frame_rgb = cv::Mat(224,224, CV_32FC3, cv::Scalar(1.0,1.0,1.0));
             frame_rgb.convertTo(in_img, cv_type, in_scale);
-            //std::cout << (int*)in_img.data << std::endl;
-            //std::cout << int(in_img.at<cv::Vec3b>(0,0)[0]) << ", ";
-            //std::cout << int(in_img.at<cv::Vec3b>(0,0)[1]) << ", ";
-            //std::cout << int(in_img.at<cv::Vec3b>(0,0)[2]) << std::endl;
             auto t_postprocess = high_resolution_clock::now();
 
-            //aquant* dpuAddr = dpuGetTensorAddress(dpuGetBoundaryIOTensor(tasks[0], splitInfo[0].shift_input_node.name.c_str()));
-            //std::cout << "addr: " << (void*)dpuAddr << ", "  << (void*)splitInfo[0].shiftAddr() << "\n";
-
-            //if (frame_num <= 5)
-                runTSMSerial(tasks, *shift_buffers);
+            runTSMSerial(tasks, *shift_buffers);
             aquant* features = splitInfo[NUM_KERNELS-1].outAddr();
 
 			float scaled_features[27];

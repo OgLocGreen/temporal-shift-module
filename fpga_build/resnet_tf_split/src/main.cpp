@@ -17,11 +17,8 @@
 
 #include "helper.h"
 
-const bool KINETICS_TEST = true;
 std::string KINETICS_PATH = "../kinetics_test/air_drumming/--nQbRBEz2s_104/";
-//std::string KINETICS_PATH = "../kinetics_test/air_drumming/0c1bhfxioqE_78/";
-
-std::string VID_PATH = "../kinetics_test_vids/air_drumming/PaLJBquyhPY.mp4";
+std::string arg_path = "";
 
 const bool HEADLESS = false;
 std::string WINDOW_NAME = "TSM on FPGA";
@@ -185,7 +182,6 @@ void allocBuffers(DPUTask* tasks[NUM_KERNELS]) {
     for (int i = 1; i < NUM_KERNELS; i++) {
         // TODO: Implement custom alloc
         // Allocate input buffers {residual, shifted}
-        std::cout << "kernel " << i << " size = " << splitInfo[i].inSize() << ", " << splitInfo[i].shifted_input_node.size() << std::endl;
         splitInfo[i].inHandle = dpuAllocMem(splitInfo[i].inSize(),
                 (int8_t*&)splitInfo[i].virt_in, (int8_t*&)splitInfo[i].phys_in);
         splitInfo[i].outHandle = dpuAllocMem(splitInfo[i].outSize(),
@@ -245,39 +241,11 @@ void doShift(int split_num, DPUTask* tasks[NUM_KERNELS]) {
     int8_t* input_data = splitInfo[split_num - 1].outAddr();
     if (split_num - 1 == 0)
         input_data = inSplitBuffer;
-        //input_data = dpuGetTensorAddress(dpuGetBoundaryIOTensor(tasks[0], splitInfo[0].output_node.name.c_str()));
-
-    /*if (input_cmp[split_num] == 0) {
-        input_cmp[split_num] = (int8_t*)malloc(input_node.size());
-        if (input_cmp[split_num] == 0)
-            fail("Failed to allocate cmp");
-    } else {
-        int diffs = 0;
-        int first_diff = -1;
-        //for (int i = 0; i < input_node.size(); i++) {
-        for (int i = 0; i < splitInfo[0].output_node.size(); i++) {
-            //diffs += input_cmp[split_num][i] != input_data[i];
-            diffs += input_cmp[1][i] != inSplitBuffer[i];
-            if (diffs > 0 && first_diff == -1)
-                first_diff = i;
-        }
-        printf("input diffs (%d) = %d, %d\n", split_num, diffs, first_diff);
-    }
-    memcpy_assign(input_cmp[split_num], input_data, input_node.size());
-    */
-
-    //std::cout << "shift_in[0] (" << split_num << ") = " << int(input_data[0]) << std::endl;
 
     const Node& output_node = splitInfo[split_num].shifted_input_node;
     int8_t* output_data = splitInfo[split_num].shiftedAddr();
-    //if (split_num == 0)
-    //    output_data = dpuGetTensorAddress(dpuGetBoundaryIOTensor(tasks[0], splitInfo[0].output_node.name.c_str()));
 
     int c = input_node.shape[2] / 8;
-
-    //printf("split: %d\n", split_num);
-    //printf("buffer: %p\n", buffer);
-    //printf("in_shape: (%d, %d, %d)\n", input_node.shape[0], input_node.shape[1], input_node.shape[2]);
 
     for (int segment = 0; segment < BATCH_SIZE; segment++) {
         for (int h = 0; h < input_node.shape[0]; h++) {
@@ -331,9 +299,6 @@ void doShift(int split_num, DPUTask* tasks[NUM_KERNELS]) {
             }
         }
     }
-
-    //printf("x1: %d\n", int(*buffer));
-    //printf("x2: %d\n", int(*(output_data+c)));
 
     // TODO: Merge residual and input split memory regions
     memcpy_assign(splitInfo[split_num].shortcutAddr(), input_data, input_node.size());
@@ -467,7 +432,15 @@ int run(cv::VideoCapture& cap) {
     printf("inscale: %f, outscale: %f\n", in_scale, out_scale);
 
     std::vector<std::string> kinetics_imgs;
-    if (KINETICS_TEST) {
+    if (arg_path != "") {
+        std::vector<std::string> temp_imgs = listDir(arg_path);
+        float tick = temp_imgs.size() / 8.0;
+        
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            int img_idx = tick / 2.0 + tick*i;
+            kinetics_imgs.push_back(temp_imgs[img_idx]);
+        }
+	} else {
         std::vector<std::string> temp_imgs = listDir(KINETICS_PATH);
         float tick = temp_imgs.size() / 8.0;
         
@@ -475,7 +448,8 @@ int run(cv::VideoCapture& cap) {
             int img_idx = tick / 2.0 + tick*i;
             kinetics_imgs.push_back(temp_imgs[img_idx]);
         }
-	}
+	} 
+
 
     std::vector<cv::Mat> in_imgs;
     for (int i = 0; i < BATCH_SIZE; i++) {
@@ -493,38 +467,24 @@ int run(cv::VideoCapture& cap) {
     auto t_lastframe = high_resolution_clock::now();
     int frame_num = -1;
     for (;;) {
-
-        //if (to_ms(high_resolution_clock::now() - t_lastframe) > 1000) {
             frame_num++;
             t_lastframe = high_resolution_clock::now();
 
             auto t_preframe = high_resolution_clock::now();
             for (int i = 0; i < BATCH_SIZE; i++) {
-                if (KINETICS_TEST) {
-                    frames[i].first = cv::imread(kinetics_imgs[i]);
+                frames[i].first = cv::imread(kinetics_imgs[i]);
                     //frames[i].first = cv::Mat(224,224,cv_type,cvScalar(0));
                     cv::imshow(WINDOW_NAME, frames[i].first);
                     cv::waitKey(500);
-                } else {
-                    // Video test
-                    cap.read(frames[i].first);
-                }
             }
 
             auto t_postframe = high_resolution_clock::now();
-            // Mirror frame
-            //std::cout << int(frame.at<cv::Vec3b>(0,0)[0]) << ", ";
-            //std::cout << int(frame.at<cv::Vec3b>(0,0)[1]) << ", ";
-            //std::cout << int(frame.at<cv::Vec3b>(0,0)[2]) << std::endl;
             for (int segment = 0; segment < BATCH_SIZE; segment++) {
                 cv::Mat frame = frames[segment].first.clone();
-                //cv::Mat& frame_rgb = frames[segment].second;
                 cv::Mat frame_rgb;
 
                 cv::cvtColor(frame, frame, cv::COLOR_BGR2RGB);
                 frame.convertTo(frame_rgb, CV_32FC3, 1/255.0);
-                //int new_w = 224;
-                //int new_h = 224;
                 int new_w = 256;
                 int new_h = 256;
                 if (frame.cols > frame.rows) {
@@ -533,9 +493,7 @@ int run(cv::VideoCapture& cap) {
                     new_h = 256*frame.rows/frame.cols;
                 }
                 cv::resize(frame_rgb, frame_rgb, cv::Size(new_w, new_h));
-                //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[0]) << std::endl;
                 frame_rgb = frame_rgb(cv::Rect((new_w - 224)/2, (new_h - 224)/2, 224, 224)).clone();
-                //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[0]) << std::endl;
 
                 // Normalize:
                 // mean = (0.485, 0.456, 0.406) = (124, i27, 104)
@@ -543,28 +501,13 @@ int run(cv::VideoCapture& cap) {
                 //frame_rgb = (frame_rgb - cv::Scalar(124, 127, 104));
                 frame_rgb -= cv::Scalar(0.485,0.456, 0.406);
                 cv::divide(frame_rgb, cv::Scalar(0.229, 0.224, 0.225), frame_rgb);
-                //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[0]) << ", ";
-                //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[1]) << ", ";
-                //std::cout << float(frame_rgb.at<cv::Vec3f>(0,0)[2]) << std::endl;
-                //frame_rgb *= (in_scale/255);
-                //std::cout << (int*)in_img.data << std::endl;
-                //frame_rgb.assignTo(in_img);
-                //frame_rgb = cv::Mat(224,224, CV_32FC3, cv::Scalar(1.0,1.0,1.0));
                 frame_rgb.convertTo(in_imgs[segment], cv_type, in_scale);
                 int8_t* input_data = dpuGetTensorAddress(dpuGetBoundaryIOTensor(tasks[0], splitInfo[0].shifted_input_node.name.c_str())) + segment*splitInfo[0].shifted_input_node.batchSize();
                 memcpy_assign(input_data, in_imgs[segment].data, splitInfo[0].shifted_input_node.batchSize());
-                //std::cout << (int*)in_img.data << std::endl;
-                //std::cout << int(in_img.at<cv::Vec3b>(0,0)[0]) << ", ";
-                //std::cout << int(in_img.at<cv::Vec3b>(0,0)[1]) << ", ";
-                //std::cout << int(in_img.at<cv::Vec3b>(0,0)[2]) << std::endl;
             }
             auto t_postprocess = high_resolution_clock::now();
 
-            //int8_t* dpuAddr = dpuGetTensorAddress(dpuGetBoundaryIOTensor(tasks[0], splitInfo[0].shift_input_node.name.c_str()));
-            //std::cout << "addr: " << (void*)dpuAddr << ", "  << (void*)splitInfo[0].shiftAddr() << "\n";
-
-            //if (frame_num <= 5)
-                runTSMSerial(tasks);
+            runTSMSerial(tasks);
             int8_t* features = splitInfo[NUM_KERNELS-1].outAddr();
 
 			float scaled_features[400] = {0.0f};
@@ -578,36 +521,20 @@ int run(cv::VideoCapture& cap) {
                 scaled_features[i] /= 8;
             }
 
-            /*
-            if (USE_SOFTMAX) {
-                dpuRunSoftmax(features, softmax, 400, 1, out_scale);
-                max_val = softmax[0];
-                for (int i = 1; i < 27; i++ ) {
-                    if (softmax[i] > max_val) {
-                        max = i;
-                        max_val = softmax[i];
-                    }
-                }
-            } else {
-            */
-                std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<std::pair<float, int>>>
-                    top5;
-                top5.push(std::make_pair(-1000, -1));
-                top5.push(std::make_pair(-1000, -1));
-                top5.push(std::make_pair(-1000, -1));
-                top5.push(std::make_pair(-1000, -1));
-                top5.push(std::make_pair(-1000, -1));
+            std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<std::pair<float, int>>>
+                top5;
+            top5.push(std::make_pair(-1000, -1));
+            top5.push(std::make_pair(-1000, -1));
+            top5.push(std::make_pair(-1000, -1));
+            top5.push(std::make_pair(-1000, -1));
+            top5.push(std::make_pair(-1000, -1));
 
-                for (int i = 0; i < 400; i++ ) {
-                    if (scaled_features[i] > top5.top().first) {
-                        top5.pop();
-                        top5.push(std::make_pair(scaled_features[i], i));
-                    }
+            for (int i = 0; i < 400; i++ ) {
+                if (scaled_features[i] > top5.top().first) {
+                    top5.pop();
+                    top5.push(std::make_pair(scaled_features[i], i));
                 }
-            //}
-           
-            //int gesture = processOutput(max, scaled_features);
-            //printf("Gesture: %s (%d); (%d, %f)\n", categories[gesture].c_str(), gesture, max, max_val);
+            }
             std::vector<std::pair<float, int>> top5_list;
             while (!top5.empty()) {
                 top5_list.push_back(top5.top());
@@ -641,10 +568,6 @@ int run(cv::VideoCapture& cap) {
             std::uint64_t d_show = std::chrono::duration_cast<std::chrono::microseconds>(t_postshow - t_postrun).count();
             std::uint64_t d_total = std::chrono::duration_cast<std::chrono::microseconds>(t_postshow - t_preframe).count();
             printf("frameprocess: %lu; run: %lu; total: %lu\n", d_frameprocess, d_run, d_total);
-
-            //if (KINETICS_TEST)
-            //    break;
-        //}
     }
 
     delete softmax;
@@ -667,7 +590,10 @@ int run(cv::VideoCapture& cap) {
     return 0;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+
+    if (argc > 1)
+        arg_path = argv[1];
 
     cv::VideoCapture cap;
     if (!KINETICS_TEST) {
